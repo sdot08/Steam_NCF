@@ -1,4 +1,4 @@
-'''
+f'''
 Created on Aug 9, 2016
 Keras Implementation of Multi-Layer Perceptron (GMF) recommender model in:
 He Xiangnan et al. Neural Collaborative Filtering. In WWW 2017.  
@@ -12,7 +12,7 @@ import theano
 import theano.tensor as T
 import keras
 from keras import backend as K
-from keras import initializations
+from keras import initializers
 from keras.regularizers import l2, activity_l2
 from keras.models import Sequential, Graph, Model
 from keras.layers.core import Dense, Lambda, Activation
@@ -53,8 +53,7 @@ def parse_args():
                         help='Whether to save the trained model.')
     return parser.parse_args()
 
-def init_normal(shape, name=None):
-    return initializations.normal(shape, scale=0.01, name=name)
+
 
 def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     assert len(layers) == len(reg_layers)
@@ -64,9 +63,9 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
 
     MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]/2, name = 'user_embedding',
-                                  init = init_normal, W_regularizer = l2(reg_layers[0]), input_length=1)
+                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), , W_regularizer = l2(reg_layers[0]), input_length=1)
     MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]/2, name = 'item_embedding',
-                                  init = init_normal, W_regularizer = l2(reg_layers[0]), input_length=1)   
+                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), , W_regularizer = l2(reg_layers[0]), input_length=1)   
     
     # Crucial to flatten an embedding vector!
     user_latent = Flatten()(MLP_Embedding_User(user_input))
@@ -76,15 +75,15 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     vector = merge([user_latent, item_latent], mode = 'concat')
     
     # MLP layers
-    for idx in xrange(1, num_layer):
+    for idx in range(1, num_layer):
         layer = Dense(layers[idx], W_regularizer= l2(reg_layers[idx]), activation='relu', name = 'layer%d' %idx)
         vector = layer(vector)
         
     # Final prediction layer
     prediction = Dense(1, activation='sigmoid', init='lecun_uniform', name = 'prediction')(vector)
     
-    model = Model(input=[user_input, item_input], 
-                  output=prediction)
+    model = Model(inputs=[user_input, item_input], 
+                  outputs=prediction)
     
     return model
 
@@ -97,9 +96,9 @@ def get_train_instances(train, num_negatives):
         item_input.append(i)
         labels.append(1)
         # negative instances
-        for t in xrange(num_negatives):
+        for t in range(num_negatives):
             j = np.random.randint(num_items)
-            while train.has_key((u, j)):
+            while (u, j) in train:
                 j = np.random.randint(num_items)
             user_input.append(u)
             item_input.append(j)
@@ -151,7 +150,7 @@ if __name__ == '__main__':
     
     # Train model
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    for epoch in xrange(epochs):
+    for epoch in range(epochs):
         t1 = time()
         # Generate training instances
         user_input, item_input, labels = get_train_instances(train, num_negatives)
