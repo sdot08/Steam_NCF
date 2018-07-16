@@ -1,4 +1,4 @@
-f'''
+'''
 Created on Aug 9, 2016
 Keras Implementation of Multi-Layer Perceptron (GMF) recommender model in:
 He Xiangnan et al. Neural Collaborative Filtering. In WWW 2017.  
@@ -13,8 +13,8 @@ import theano.tensor as T
 import keras
 from keras import backend as K
 from keras import initializers
-from keras.regularizers import l2, activity_l2
-from keras.models import Sequential, Graph, Model
+from keras.regularizers import l2
+from keras.models import Sequential, Model
 from keras.layers.core import Dense, Lambda, Activation
 from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout
 from keras.constraints import maxnorm
@@ -63,9 +63,9 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
 
     MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]/2, name = 'user_embedding',
-                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), , W_regularizer = l2(reg_layers[0]), input_length=1)
+                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)
     MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]/2, name = 'item_embedding',
-                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), , W_regularizer = l2(reg_layers[0]), input_length=1)   
+                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)   
     
     # Crucial to flatten an embedding vector!
     user_latent = Flatten()(MLP_Embedding_User(user_input))
