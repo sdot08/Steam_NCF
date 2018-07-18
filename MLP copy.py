@@ -16,7 +16,7 @@ from keras import initializers
 from keras.regularizers import l2
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Lambda, Activation
-from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout, concatenate
+from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout
 from keras.constraints import maxnorm
 from keras.optimizers import Adagrad, Adam, SGD, RMSprop
 from evaluate import evaluate_model
@@ -26,8 +26,6 @@ import sys
 import argparse
 import multiprocessing as mp
 
-import pickle
-import util
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run MLP.")
@@ -53,8 +51,6 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
-    parser.add_argument('--if_cat', type=int, default=1,
-                        help='whether to include the category features.')
     return parser.parse_args()
 
 
@@ -65,27 +61,18 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     # Input variables
     user_input = Input(shape=(1,), dtype='int32', name = 'user_input')
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
-    
-    num_cat = 18
-    cat_input = Input(shape=(num_cat,), dtype='float', name = 'cat_input')
 
-    MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]//2, name = 'user_embedding',
+    MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]/2, name = 'user_embedding',
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)
-    MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]//2, name = 'item_embedding',
+    MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]/2, name = 'item_embedding',
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)   
     
     # Crucial to flatten an embedding vector!
     user_latent = Flatten()(MLP_Embedding_User(user_input))
     item_latent = Flatten()(MLP_Embedding_Item(item_input))
-
-    if if_cat:
-        item_cat_merge = concatenate([item_latent, cat_input])
-        item_cat_latent = Dense(layers[0]//2, activation='relu', init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
-        vector = merge([user_latent, item_cat_latent], mode = 'concat')
-    else:
-        vector = merge([user_latent, item_latent], mode = 'concat')
-
+    
     # The 0-th layer is the concatenation of embedding layers
+    vector = merge([user_latent, item_latent], mode = 'concat')
     
     # MLP layers
     for idx in range(1, num_layer):
@@ -95,11 +82,28 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
     # Final prediction layer
     prediction = Dense(1, activation='sigmoid', init='lecun_uniform', name = 'prediction')(vector)
     
-    model = Model(inputs=[user_input, item_input, cat_input], 
-                outputs=prediction)
+    model = Model(inputs=[user_input, item_input], 
+                  outputs=prediction)
     
     return model
 
+def get_train_instances(train, num_negatives):
+    user_input, item_input, labels = [],[],[]
+    num_users = train.shape[0]
+    for (u, i) in train.keys():
+        # positive instance
+        user_input.append(u)
+        item_input.append(i)
+        labels.append(1)
+        # negative instances
+        for t in range(num_negatives):
+            j = np.random.randint(num_items)
+            while (u, j) in train:
+                j = np.random.randint(num_items)
+            user_input.append(u)
+            item_input.append(j)
+            labels.append(0)
+    return user_input, item_input, labels
 
 if __name__ == '__main__':
     args = parse_args()
@@ -113,7 +117,7 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     epochs = args.epochs
     verbose = args.verbose
-    if_cat = args.if_cat
+    
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("MLP arguments: %s " %(args))
@@ -149,10 +153,10 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         t1 = time()
         # Generate training instances
-        user_input, item_input, cat_input, labels = util.get_train_instances(train, num_negatives)
+        user_input, item_input, labels = get_train_instances(train, num_negatives)
     
         # Training        
-        hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input
+        hist = model.fit([np.array(user_input), np.array(item_input)], #input
                          np.array(labels), # labels 
                          batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
         t2 = time()

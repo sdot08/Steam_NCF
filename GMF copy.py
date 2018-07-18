@@ -25,7 +25,7 @@ import math
 import argparse
 
 import pickle
-import util
+
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run GMF.")
@@ -51,20 +51,17 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
-    parser.add_argument('--if_cat', type=int, default=1,
-                        help='whether to include the category features.')
     return parser.parse_args()
 
 #def init_normal():
 #    return initializers.RandomNormal(stddev=0.01)
 
-def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
-    num_cat = 18
-    
+def get_model(num_users, num_items, latent_dim, regs=[0,0]):
+    num_Cat = 18
     # Input variables
     user_input = Input(shape=(1,), dtype='int32', name = 'user_input')
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
-    cat_input = Input(shape=(num_cat,), dtype='float', name = 'cat_input')
+    cat_input = Input(shape=(num_cat,), dtype='int32', name = 'cat_input')
  #   MF_Embedding_User = Embedding(input_dim = num_users, output_dim = latent_dim, name = 'user_embedding',
  #                                 init = init_normal, W_regularizer = l2(regs[0]), input_length=1)
  #   MF_Embedding_Item = Embedding(input_dim = num_items, output_dim = latent_dim, name = 'item_embedding',
@@ -74,19 +71,17 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(regs[0]), input_length=1)
     MF_Embedding_Item = Embedding(input_dim = num_items, output_dim = latent_dim, name = 'item_embedding',
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(regs[1]), input_length=1) 
-    #MF_Embedding_Cat = Embedding(input_dim = num_users, output_dim = latent_dim, name = 'category_embedding',
-    #                              init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(regs[1]), input_length=num_cat)     
+    MF_Embedding_Cat = Embedding(input_dim = num_users, output_dim = latent_dim, name = 'item_embedding',
+                                  init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(regs[1]), input_length=num_Cat)     
     # Crucial to flatten an embedding vector!
     user_latent = Flatten()(MF_Embedding_User(user_input))
     item_latent = Flatten()(MF_Embedding_Item(item_input))
-    if if_cat:
-        item_cat_merge = concatenate([item_latent, cat_input])
-        item_cat_latent = Dense(latent_dim, activation=None, init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
-        predict_vector = merge([user_latent, item_cat_latent], mode = 'mul')
-    else:
-        predict_vector = merge([user_latent, item_latent], mode = 'mul')
+    cat_latent = Flatten()(MF_Embedding_Item(Cat_input))
+
+    item_cat_merge = concatenate([item_latent, cat_latent])
+    item_cat_latent = Dense(latent_dim, activation='relu', init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
     # Element-wise product of user and item embeddings 
-    
+    predict_vector = merge([user_latent, item_cat_latent], mode = 'mul')
     
     # Final prediction layer
     #prediction = Lambda(lambda x: K.sigmoid(K.sum(x)), output_shape=(1,))(predict_vector)
@@ -94,11 +89,29 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
     
     model = Model(inputs=[user_input, item_input, cat_input], 
                 outputs=prediction)
+
     return model
 
-
-
-
+def get_train_instances(train, num_negatives):
+    cat_id2cat = pickle.load(open("/Users/hp/GitHub/neural_collaborative_filtering/Data/dict_id2cat.p", "rb" ))
+    user_input, item_input, labels = [],[],[]
+    num_users = train.shape[0]
+    for (u, i) in train.keys():
+        # positive instance
+        user_input.append(u)
+        item_input.append(i)
+        cat_input.append(cat_id2cat[i])
+        labels.append(1)
+        # negative instances
+        for t in range(num_negatives):
+            j = np.random.randint(num_items)
+            while (u, j) in train:
+                j = np.random.randint(num_items)
+            user_input.append(u)
+            item_input.append(j)
+            cat_input.append(cat_id2cat[j])
+            labels.append(0)
+    return user_input, item_input, cat_input, labels
 
 if __name__ == '__main__':
     args = parse_args()
@@ -110,8 +123,7 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch_size
     verbose = args.verbose
-    if_cat = args.if_cat
-
+    
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("GMF arguments: %s" %(args))
@@ -130,7 +142,7 @@ if __name__ == '__main__':
     if learner.lower() == "adagrad": 
         model.compile(optimizer=Adagrad(lr=learning_rate), loss='binary_crossentropy')
     elif learner.lower() == "rmsprop":
-        model.compile(optimizer=op(lr=learning_rate), loss='binary_crossentropy')
+        model.compile(optimizer=RMSprop(lr=learning_rate), loss='binary_crossentropy')
     elif learner.lower() == "adam":
         model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
     else:
@@ -150,13 +162,14 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         t1 = time()
         # Generate training instances
-        user_input, item_input, cat_input, labels = util.get_train_instances(train, num_negatives)
+        user_input, item_input, cat_input, labels = get_train_instances(train, num_negatives)
         
         # Training
         hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input
                          np.array(labels), # labels 
                          batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
         t2 = time()
+        
         # Evaluation
         if epoch %verbose == 0:
             (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)

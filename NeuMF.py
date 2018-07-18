@@ -15,7 +15,7 @@ from keras import initializers
 from keras.regularizers import l1, l2
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Lambda, Activation
-from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout
+from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout, concatenate
 from keras.optimizers import Adagrad, Adam, SGD, RMSprop
 from evaluate import evaluate_model
 from Dataset import Dataset
@@ -24,6 +24,8 @@ import sys
 import GMF, MLP
 import argparse
 
+import pickle
+import util
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run NeuMF.")
@@ -57,6 +59,10 @@ def parse_args():
                         help='Specify the pretrain model file for MF part. If empty, no pretrain will be used')
     parser.add_argument('--mlp_pretrain', nargs='?', default='',
                         help='Specify the pretrain model file for MLP part. If empty, no pretrain will be used')
+    
+    parser.add_argument('--if_cat', type=int, default=1,
+                        help='whether to include the category features.')
+
     return parser.parse_args()
 
 def init_normal():
@@ -68,6 +74,9 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     # Input variables
     user_input = Input(shape=(1,), dtype='int32', name = 'user_input')
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
+
+    num_cat = 18
+    cat_input = Input(shape=(num_cat,), dtype='float', name = 'cat_input')
     
     # Embedding layer
     MF_Embedding_User = Embedding(input_dim = num_users, output_dim = mf_dim, name = 'mf_embedding_user',
@@ -75,20 +84,37 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     MF_Embedding_Item = Embedding(input_dim = num_items, output_dim = mf_dim, name = 'mf_embedding_item',
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_mf), input_length=1)   
 
-    MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]/2, name = "mlp_embedding_user",
+    MLP_Embedding_User = Embedding(input_dim = num_users, output_dim = layers[0]//2, name = "mlp_embedding_user",
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)
-    MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]/2, name = 'mlp_embedding_item',
+    MLP_Embedding_Item = Embedding(input_dim = num_items, output_dim = layers[0]//2, name = 'mlp_embedding_item',
                                   init = keras.initializers.RandomNormal(mean=0.0, stddev=0.01), W_regularizer = l2(reg_layers[0]), input_length=1)   
     
     # MF part
     mf_user_latent = Flatten()(MF_Embedding_User(user_input))
     mf_item_latent = Flatten()(MF_Embedding_Item(item_input))
-    mf_vector = merge([mf_user_latent, mf_item_latent], mode = 'mul') # element-wise multiply
+    #mf_vector = merge([mf_user_latent, mf_item_latent], mode = 'mul') # element-wise multiply
+    
+    if if_cat:
+        item_cat_merge = concatenate([item_latent, cat_input])
+        item_cat_latent = Dense(mf_dim, activation='relu', init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
+        mf_vector = merge([user_latent, item_cat_latent], mode = 'mul')
+    else:
+        mf_vector = merge([user_latent, item_latent], mode = 'mul')
 
     # MLP part 
     mlp_user_latent = Flatten()(MLP_Embedding_User(user_input))
     mlp_item_latent = Flatten()(MLP_Embedding_Item(item_input))
-    mlp_vector = merge([mlp_user_latent, mlp_item_latent], mode = 'concat')
+    #mlp_vector = merge([mlp_user_latent, mlp_item_latent], mode = 'concat')
+    
+    if if_cat:
+        cat_latent = Flatten()(MF_Embedding_Item(cat_input))
+        item_cat_merge = concatenate([item_latent, cat_input])
+        item_cat_latent = Dense(layers[0]//2, activation='relu', init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
+        mlp_vector = merge([user_latent, item_cat_latent], mode = 'concat')
+    else:
+        mlp_vector = merge([user_latent, item_latent], mode = 'concat')
+
+    
     for idx in range(1, num_layer):
         layer = Dense(layers[idx], W_regularizer= l2(reg_layers[idx]), activation='relu', name="layer%d" %idx)
         mlp_vector = layer(mlp_vector)
@@ -101,8 +127,8 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     # Final prediction layer
     prediction = Dense(1, activation='sigmoid', init='lecun_uniform', name = "prediction")(predict_vector)
     
-    model = Model(inputs=[user_input, item_input], 
-                  outputs=prediction)
+    model = Model(inputs=[user_input, item_input, cat_input], 
+                outputs=prediction)
     
     return model
 
@@ -132,23 +158,6 @@ def load_pretrain_model(model, gmf_model, mlp_model, num_layers):
     model.get_layer('prediction').set_weights([0.5*new_weights, 0.5*new_b])    
     return model
 
-def get_train_instances(train, num_negatives):
-    user_input, item_input, labels = [],[],[]
-    num_users = train.shape[0]
-    for (u, i) in train.keys():
-        # positive instance
-        user_input.append(u)
-        item_input.append(i)
-        labels.append(1)
-        # negative instances
-        for t in range(num_negatives):
-            j = np.random.randint(num_items)
-            while (u, j) in train:
-                j = np.random.randint(num_items)
-            user_input.append(u)
-            item_input.append(j)
-            labels.append(0)
-    return user_input, item_input, labels
 
 if __name__ == '__main__':
     args = parse_args()
@@ -164,7 +173,7 @@ if __name__ == '__main__':
     verbose = args.verbose
     mf_pretrain = args.mf_pretrain
     mlp_pretrain = args.mlp_pretrain
-            
+    if_cat = args.if_cat 
     topK = 10
     evaluation_threads = 1#mp.cpu_count()
     print("NeuMF arguments: %s " %(args))
@@ -210,10 +219,10 @@ if __name__ == '__main__':
     for epoch in range(num_epochs):
         t1 = time()
         # Generate training instances
-        user_input, item_input, labels = get_train_instances(train, num_negatives)
+        user_input, item_input, cat_input, labels =util.get_train_instances(train, num_negatives)
         
         # Training
-        hist = model.fit([np.array(user_input), np.array(item_input)], #input
+        hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input
                          np.array(labels), # labels 
                          batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
         t2 = time()

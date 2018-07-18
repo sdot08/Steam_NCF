@@ -12,6 +12,8 @@ import heapq # for retrieval topK
 import multiprocessing
 import numpy as np
 from time import time
+import pickle
+import util
 #from numba import jit, autojit
 
 # Global variables that are shared across processes
@@ -29,10 +31,14 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
     global _testRatings
     global _testNegatives
     global _K
+    global _cat_id2cat
+
     _model = model
     _testRatings = testRatings
     _testNegatives = testNegatives
     _K = K
+    _cat_id2cat = pickle.load(open("./Data/dict_id2cat.p", "rb" ))
+
         
     hits, ndcgs = [],[]
     if(num_thread > 1): # Multi-thread
@@ -53,13 +59,19 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
 def eval_one_rating(idx):
     rating = _testRatings[idx]
     items = _testNegatives[idx]
+
+    cat_id2cat = _cat_id2cat
+
     u = rating[0]
     gtItem = rating[1]
     items.append(gtItem)
+
+    cat = [util.find_cat(item, cat_id2cat) for item in items]
+
     # Get prediction scores
     map_item_score = {}
     users = np.full(len(items), u, dtype = 'int32')
-    predictions = _model.predict([users, np.array(items)], 
+    predictions = _model.predict([users, np.array(items), np.array(cat)], 
                                  batch_size=100, verbose=0)
     for i in range(len(items)):
         item = items[i]
