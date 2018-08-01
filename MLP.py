@@ -80,7 +80,7 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
 
     if if_cat:
         item_cat_merge = concatenate([item_latent, cat_input])
-        item_cat_latent = Dense(layers[0]//2, activation='relu', init='lecun_uniform', name = 'item_cat_latent')(item_cat_merge)
+        item_cat_latent = Dense(layers[0]//2, activation='relu', init='RandomNormal(stddev = 0.01)', name = 'item_cat_latent')(item_cat_merge)
         vector = merge([user_latent, item_cat_latent], mode = 'concat')
     else:
         vector = merge([user_latent, item_latent], mode = 'concat')
