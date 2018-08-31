@@ -16,14 +16,13 @@ from keras.layers.core import Dense, Lambda, Activation
 from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten
 from keras.optimizers import Adagrad, Adam, SGD, RMSprop
 from keras.regularizers import l2
-from Dataset import Dataset
 from evaluate import evaluate_model
 from time import time
 import multiprocessing as mp
 import sys
 import math
 import argparse
-
+import pickle
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run GMF.")
@@ -49,6 +48,8 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
+    parser.add_argument('--mini', type=int, default=0,
+                        help='Whether to use the mini data.')
     return parser.parse_args()
 
 #def init_normal():
@@ -86,7 +87,7 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0]):
 
 def get_train_instances(train, num_negatives):
     user_input, item_input, labels = [],[],[]
-    num_users = train.shape[0]
+    num_users, num_items = pickle.load(open(prepath + "num_users.p", "rb" )), pickle.load(open(prepath + "num_items.p", "rb" ))
     for (u, i) in train.keys():
         # positive instance
         user_input.append(u)
@@ -103,6 +104,7 @@ def get_train_instances(train, num_negatives):
     return user_input, item_input, labels
 
 if __name__ == '__main__':
+    
     args = parse_args()
     num_factors = args.num_factors
     regs = eval(args.regs)
@@ -112,19 +114,23 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch_size
     verbose = args.verbose
-    
+    mini = int(args.mini)
+
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("GMF arguments: %s" %(args))
-    model_out_file = 'Pretrain/%s_GMF_%d_%d.h5' %(args.dataset, num_factors, time())
+    prepath = '../'
+    model_out_file = prepath + 'Pretrain/GMF_%d_%d.h5' %(num_factors, time())
     
     # Loading data
     t1 = time()
-    dataset = Dataset(args.path + args.dataset)
-    train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
-    num_users, num_items = train.shape
-    print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
-          %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
+    prepath = '../data/'
+    if mini == 1:
+        prepath += 'mini_'
+    train, testRatings, testNegatives = pickle.load(open(prepath + "mat.p", "rb" )), pickle.load(open(prepath + "testRatings.p","rb")), pickle.load(open(prepath + "testNegatives.p","rb"))
+    num_users, num_items = pickle.load(open(prepath + "num_users.p", "rb" )), pickle.load(open(prepath + "num_items.p", "rb" ))
+    #print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
+    #      %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
     # Build model
     model = get_model(num_users, num_items, num_factors, regs)
