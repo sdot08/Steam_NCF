@@ -23,6 +23,8 @@ import sys
 import math
 import argparse
 import pickle
+from hyperparams import Hyperparams as hp
+
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run GMF.")
@@ -124,7 +126,7 @@ if __name__ == '__main__':
     
     # Loading data
     t1 = time()
-    prepath = '../data/'
+    prepath = '../data/' + hp.fn
     if mini == 1:
         prepath += 'mini_'
     train, testRatings, testNegatives = pickle.load(open(prepath + "mat.p", "rb" )), pickle.load(open(prepath + "testRatings.p","rb")), pickle.load(open(prepath + "testNegatives.p","rb"))

@@ -5,16 +5,44 @@ Processing datasets.
 @author: Xiangnan He (xiangnanhe@gmail.com)
 '''
 import numpy as np
+import scipy.sparse as sp
 import pickle
 import random
 import sys
+from hyperparams import Hyperparams as hp
+
+
+FILE_LENGTH = 331590167
+CHUNK_NUM = 4
+FILE_NAME = 'info.txt'
+
+def split_file(file_length, chunk_num):
+    # return:
+    # boundary: list
+    chunk_length = file_length / chunk_num
+    boundary = [0]
+    for i in range(chunk_num):
+        boundary.append(chunk_length * (i + 1))
+    return boundary
+    
 def save_object(obj, filename):
     with open(filename, 'wb') as output:  # Overwrites any existing file.
         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
+def ptime2cat(pt):
+    if pt < hp.min_pt:
+        return 0
+    elif pt < hp.cutoff_pt:
+        return 1
+    else:
+        return 2
+
 def read_data(filename, num_negatives = 20, mini = 0):
+    file_handle = open(filename, "r")
     
-    num_users, num_items = 0, 0
+    # split file
+    splits_bd = split_file(FILE_LENGTH, CHUNK_NUM)
+
     unique_users_raw = set()
     unique_items_raw = set()
     unique_users = set()
@@ -49,54 +77,55 @@ def read_data(filename, num_negatives = 20, mini = 0):
     items_set = set()
     testRatings = []
     testNegatives = []
+    items_ptime_list = []
     with open(filename, "r") as f:
         line = f.readline()
         while line != None and line != "":
             arr = line.split(",")
-            user, item, rating = int(arr[0]), int(arr[1]), 1.0
+            user, item, ptime = int(arr[0]), int(arr[1]), 0 if arr[3] == 'None' else int(arr[3])
             user = user2userid[user]
             item = item2itemid[item]
             if user == current_key:
-                if rating > 0:
-                    items_set.add(item)
+                items_set.add(item)
+                items_ptime_list.append((item, ptime))
             else:
                 if current_key:
                     for i in range(num_negatives):
                         negative_item = random.sample(unique_items, 1)[0]
-                        #negative_item = items_set[int(np.random.random() * len_unique_items)]
                         while negative_item in items_set:
                             negative_item = random.sample(unique_items, 1)[0]
-                            #negative_item = items_set[int(np.random.random() * len_unique_items)]
                         negatives.append(negative_item)
                     testNegatives.append(negatives)
-                    test_item = random.sample(items_set, 1)[0]
-                    #test_item = items_set[int(np.random.random() * len(items_set))]
+                    test_item_index = np.random.choice(len(items_set))
+                    test_item = items_ptime_list[test_item_index][0]
                     items_set.remove(test_item)
+                    del items_ptime_list[test_item_index]
                     testRatings.append([current_key, test_item])
-                    for i in items_set:
-                        mat[current_key, i] = 1.0  
+                    for i in items_ptime_list:
+                        mat[current_key, i[0]] = i[1] 
 
                 items_set = set()
+                items_ptime_list = []
                 negatives = []
                 current_key = user
                 items_set.add(item)
+                items_ptime_list.append((item, ptime))
             line = f.readline()  
     for i in range(num_negatives):
         negative_item = random.sample(unique_items, 1)[0]
-        #negative_item = items_set[int(np.random.random() * len_unique_items)]
         while negative_item in items_set:
             negative_item = random.sample(unique_items, 1)[0]
-            #negative_item = items_set[int(np.random.random() * len_unique_items)]
         negatives.append(negative_item)
     testNegatives.append(negatives)
-    test_item = random.sample(items_set, 1)[0]
-    #test_item = items_set[int(np.random.random() * len(items_set))]
+    test_item_index = np.random.choice(len(items_set))
+    test_item = items_ptime_list[test_item_index][0]
     items_set.remove(test_item)
+    del items_ptime_list[test_item_index]
     testRatings.append([current_key, test_item])
-    for i in items_set:
-        mat[current_key, i] = 1.0
-    prepath = '../data/'
-    if mini == 1:
+    for i in items_ptime_list:
+        mat[current_key, i[0]] = i[1] 
+    prepath = '../data/' + hp.fn 
+    if mini == 1: 
         prepath += 'mini_'
     save_object(mat, prepath +'mat.p')
     save_object(testRatings, prepath +'testRatings.p')
@@ -110,9 +139,9 @@ def main():
     prepath = '../data/'
     mini = int(sys.argv[1])
     if mini == 1:
-        filename = prepath +'info_mini2.txt'
+        filename = prepath + 'info_mini2.txt'
     else:
-        filename = prepath +'info.txt'
+        filename = prepath + 'info.txt'
     read_data(filename, mini = mini)
 
 
