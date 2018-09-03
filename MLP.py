@@ -25,7 +25,7 @@ from time import time
 import sys
 import argparse
 import multiprocessing as mp
-
+from module import *
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run MLP.")
@@ -91,18 +91,22 @@ def get_train_instances(train, num_negatives):
     user_input, item_input, labels = [],[],[]
     num_users = train.shape[0]
     for (u, i) in train.keys():
-        # positive instance
-        user_input.append(u)
-        item_input.append(i)
-        labels.append(1)
-        # negative instances
-        for t in range(num_negatives):
-            j = np.random.randint(num_items)
-            while (u, j) in train:
-                j = np.random.randint(num_items)
+        
+        pt = train[(u,i)]
+        sr = pt2sr(pt)
+        for i in range(sr):
+            # positive instance
             user_input.append(u)
-            item_input.append(j)
-            labels.append(0)
+            item_input.append(i)
+            labels.append(1)
+            # negative instances
+            for t in range(num_negatives):
+                j = np.random.randint(num_items)
+                while (u, j) in train:
+                    j = np.random.randint(num_items)
+                user_input.append(u)
+                item_input.append(j)
+                labels.append(0) 
     return user_input, item_input, labels
 
 if __name__ == '__main__':
