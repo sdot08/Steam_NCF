@@ -23,7 +23,9 @@ import sys
 import math
 import argparse
 import pickle
-from hyperparams import Hyperparams as hp
+
+import os # add by Aodong
+from hyperparams import Hyperparams as hp #yueqiu
 
 #################### Arguments ####################
 def parse_args():
@@ -50,8 +52,13 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
+    # added by Aodong
+    parser.add_argument('--chunk_id', type=int, default=0,
+                        help='Data chunk id.')
     parser.add_argument('--mini', type=int, default=0,
-                        help='Whether to use the mini data.')
+                    help='Whether to use the mini data.') #yueqiu
+    parser.add_argument('--gt', type=int, default=0,
+                        help='include confidence or not')  #yueqiu
     return parser.parse_args()
 
 #def init_normal():
@@ -87,9 +94,9 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0]):
 
     return model
 
-def get_train_instances(train, num_negatives):
+def get_train_instances(train, num_negatives, prepath):
     user_input, item_input, labels = [],[],[]
-    num_users, num_items = pickle.load(open(prepath + "num_users.p", "rb" )), pickle.load(open(prepath + "num_items.p", "rb" ))
+    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
     for (u, i) in train.keys():
         # positive instance
         user_input.append(u)
@@ -116,21 +123,22 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch_size
     verbose = args.verbose
-    mini = int(args.mini)
-
+    mini = args.mini #yueqiu
+    chunk_id = '_' + str(args.chunk_id) # added by Aodong
+    gt = args.gt   #yueqiu
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("GMF arguments: %s" %(args))
-    prepath = '../'
-    model_out_file = prepath + 'Pretrain/GMF_%d_%d.h5' %(num_factors, time())
+    prepath_out = hp.prepath_out + hp.fn if gt == 1 else hp.prepath_out #yueqiu
+    prepath_out = prepath_out + 'mini_' if mini == 1 else prepath_out #yueqiu
+    model_out_file = prepath_out + 'GMF_%d.h5' %(num_factors) # modified by Aodong
     
     # Loading data
     t1 = time()
-    prepath = '../data/' + hp.fn
-    if mini == 1:
-        prepath += 'mini_'
-    train, testRatings, testNegatives = pickle.load(open(prepath + "mat.p", "rb" )), pickle.load(open(prepath + "testRatings.p","rb")), pickle.load(open(prepath + "testNegatives.p","rb"))
-    num_users, num_items = pickle.load(open(prepath + "num_users.p", "rb" )), pickle.load(open(prepath + "num_items.p", "rb" ))
+    prepath = hp.prepath + hp.fn if gt == 1 else hp.prepath #yueqiu
+    prepath = prepath + 'mini_' if mini == 1 else prepath #yueqiu
+    train, testRatings, testNegatives = pickle.load(open(prepath + "mat" + chunk_id + ".p", "rb" )), pickle.load(open(prepath + "testRatings" + chunk_id + ".p","rb")), pickle.load(open(prepath + "testNegatives" + chunk_id + ".p","rb")) # modified by Aodong
+    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
     #print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
     #      %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
@@ -146,6 +154,10 @@ if __name__ == '__main__':
         model.compile(optimizer=SGD(lr=learning_rate), loss='binary_crossentropy')
     #print(model.summary())
     
+    # Load model, added by Aodong
+    if os.path.exists(model_out_file): 
+        model.load_weights(model_out_file)
+
     # Init performance
     t1 = time()
     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
@@ -159,7 +171,7 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         t1 = time()
         # Generate training instances
-        user_input, item_input, labels = get_train_instances(train, num_negatives)
+        user_input, item_input, labels = get_train_instances(train, num_negatives, prepath)
         
         # Training
         hist = model.fit([np.array(user_input), np.array(item_input)], #input
