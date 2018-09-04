@@ -16,13 +16,16 @@ from keras.layers.core import Dense, Lambda, Activation
 from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, concatenate
 from keras.optimizers import Adagrad, Adam, SGD, RMSprop
 from keras.regularizers import l2
-from Dataset import Dataset
 from evaluate import evaluate_model
 from time import time
 import multiprocessing as mp
 import sys
 import math
 import argparse
+import pickle
+
+import os # add by Aodong
+from hyperparams import Hyperparams as hp #yueqiu
 
 import pickle
 import util
@@ -51,8 +54,15 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
-    parser.add_argument('--if_cat', type=int, default=1,
-                        help='whether to include the category features.')
+
+    # added by Aodong
+    parser.add_argument('--chunk_id', type=int, default=0,
+                        help='Data chunk id.')
+    parser.add_argument('--mini', type=int, default=0,
+                    help='Whether to use the mini data.') #yueqiu
+    parser.add_argument('--gt', type=int, default=0,
+                        help='include confidence or not')  #yueqiu
+
     return parser.parse_args()
 
 #def init_normal():
@@ -96,11 +106,26 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
                 outputs=prediction)
     return model
 
-
-
-
+def get_train_instances(train, num_negatives, prepath):
+    user_input, item_input, labels = [],[],[]
+    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
+    for (u, i) in train.keys():
+        # positive instance
+        user_input.append(u)
+        item_input.append(i)
+        labels.append(1)
+        # negative instances
+        for t in range(num_negatives):
+            j = np.random.randint(num_items)
+            while (u, j) in train:
+                j = np.random.randint(num_items)
+            user_input.append(u)
+            item_input.append(j)
+            labels.append(0)
+    return user_input, item_input, labels
 
 if __name__ == '__main__':
+    
     args = parse_args()
     num_factors = args.num_factors
     regs = eval(args.regs)
@@ -110,20 +135,25 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch_size
     verbose = args.verbose
-    if_cat = args.if_cat
 
+    mini = args.mini #yueqiu
+    chunk_id = '_' + str(args.chunk_id) # added by Aodong
+    gt = args.gt   #yueqiu
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("GMF arguments: %s" %(args))
-    model_out_file = 'Pretrain/%s_GMF_%d_%d.h5' %(args.dataset, num_factors, time())
+    prepath_out = hp.prepath_out + hp.fn if gt == 1 else hp.prepath_out #yueqiu
+    prepath_out = prepath_out + 'mini_' if mini == 1 else prepath_out #yueqiu
+    model_out_file = prepath_out + 'GMF_%d.h5' %(num_factors) # modified by Aodong
     
     # Loading data
     t1 = time()
-    dataset = Dataset(args.path + args.dataset)
-    train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
-    num_users, num_items = train.shape
-    print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
-          %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
+    prepath = hp.prepath + hp.fn if gt == 1 else hp.prepath #yueqiu
+    prepath = prepath + 'mini_' if mini == 1 else prepath #yueqiu
+    train, testRatings, testNegatives = pickle.load(open(prepath + "mat" + chunk_id + ".p", "rb" )), pickle.load(open(prepath + "testRatings" + chunk_id + ".p","rb")), pickle.load(open(prepath + "testNegatives" + chunk_id + ".p","rb")) # modified by Aodong
+    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
+    #print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
+    #      %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
     # Build model
     model = get_model(num_users, num_items, num_factors, regs)
@@ -137,6 +167,10 @@ if __name__ == '__main__':
         model.compile(optimizer=SGD(lr=learning_rate), loss='binary_crossentropy')
     #print(model.summary())
     
+    # Load model, added by Aodong
+    if os.path.exists(model_out_file): 
+        model.load_weights(model_out_file)
+
     # Init performance
     t1 = time()
     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
@@ -150,7 +184,8 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         t1 = time()
         # Generate training instances
-        user_input, item_input, cat_input, labels = util.get_train_instances(train, num_negatives)
+
+        user_input, item_input, labels = get_train_instances(train, num_negatives, prepath)
         
         # Training
         hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input

@@ -19,6 +19,9 @@ from keras.layers.core import Dense, Lambda, Activation
 from keras.layers import Embedding, Input, Dense, merge, Reshape, Merge, Flatten, Dropout, concatenate
 from keras.constraints import maxnorm
 from keras.optimizers import Adagrad, Adam, SGD, RMSprop
+import pickle
+import util
+
 from evaluate import evaluate_model
 from Dataset import Dataset
 from time import time
@@ -26,8 +29,9 @@ import sys
 import argparse
 import multiprocessing as mp
 
-import pickle
-import util
+
+
+from module import *
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run MLP.")
@@ -99,6 +103,29 @@ def get_model(num_users, num_items, layers = [20,10], reg_layers=[0,0]):
                 outputs=prediction)
     
     return model
+
+
+def get_train_instances(train, num_negatives):
+    user_input, item_input, labels = [],[],[]
+    num_users = train.shape[0]
+    for (u, i) in train.keys():
+        
+        pt = train[(u,i)]
+        sr = pt2sr(pt)
+        for i in range(sr):
+            # positive instance
+            user_input.append(u)
+            item_input.append(i)
+            labels.append(1)
+            # negative instances
+            for t in range(num_negatives):
+                j = np.random.randint(num_items)
+                while (u, j) in train:
+                    j = np.random.randint(num_items)
+                user_input.append(u)
+                item_input.append(j)
+                labels.append(0) 
+    return user_input, item_input, labels
 
 
 if __name__ == '__main__':
