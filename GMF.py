@@ -108,7 +108,6 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
 
 def get_train_instances(train, num_negatives, prepath):
     user_input, item_input, labels = [],[],[]
-    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
     for (u, i) in train.keys():
         # positive instance
         user_input.append(u)
@@ -151,7 +150,7 @@ if __name__ == '__main__':
     prepath = hp.prepath + hp.fn if gt == 1 else hp.prepath #yueqiu
     prepath = prepath + 'mini_' if mini == 1 else prepath #yueqiu
     train, testRatings, testNegatives = pickle.load(open(prepath + "mat" + chunk_id + ".p", "rb" )), pickle.load(open(prepath + "testRatings" + chunk_id + ".p","rb")), pickle.load(open(prepath + "testNegatives" + chunk_id + ".p","rb")) # modified by Aodong
-    num_users, num_items = pickle.load(open(prepath + "num_users" + ".p", "rb" )), pickle.load(open(prepath + "num_items" + ".p", "rb" )) # modified by Aodong
+    num_users, num_items = pickle.load(open(prepath + "num_users" + chunk_id + ".p", "rb" )), pickle.load(open(prepath + "num_items" + chunk_id + ".p", "rb" )) # modified by Aodong
     #print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
     #      %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     

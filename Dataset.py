@@ -38,41 +38,41 @@ def read_data(filename, num_negatives = 20, mini = 0):
     # split file
     splits_bd = split_file(FILE_LENGTH, CHUNK_NUM)
 
-    unique_users_raw = set()
-    unique_items_raw = set()
-    unique_users = set()
-    unique_items = set()
-    item2itemid = {}
-    user2userid = {}
-
-    for idx, line in enumerate(file_handle.readlines()):
-        if line != None and line != "":
-            arr = line.split(",")
-            u, i = int(arr[0]), int(arr[1])
-            unique_users_raw.add(u)
-            unique_items_raw.add(i)
-
-
-    itemid = 0
-    for item in unique_items_raw:
-        item2itemid[item] = itemid 
-        unique_items.add(itemid)
-        itemid += 1
-    userid = 0  
-    for user in unique_users_raw:
-        user2userid[user] = userid
-        unique_users.add(userid)
-        userid += 1
-
     for chunk_id, (chunk_start, chunk_end) in enumerate(zip(splits_bd[:-1], splits_bd[1:])):
 
         mat = {}
         testRatings = []
         testNegatives = []
 
-        len_unique_items = len(unique_items)
-        current_key = None
-        items_set = set()
+        unique_users_raw = set()
+        unique_items_raw = set()
+        unique_users = set()
+        unique_items = set()
+        item2itemid = {}
+        user2userid = {}
+
+        file_handle.seek(0)
+        for idx, line in enumerate(file_handle.readlines()):
+            if idx >= chunk_start and idx <= chunk_end and line != None and line != "":
+                arr = line.split(",")
+                u, i = int(arr[0]), int(arr[1])
+                unique_users_raw.add(u)
+                unique_items_raw.add(i)
+
+        itemid = 0
+        for item in unique_items_raw:
+            item2itemid[item] = itemid 
+            unique_items.add(itemid)
+            itemid += 1
+        userid = 0  
+        for user in unique_users_raw:
+            user2userid[user] = userid
+            unique_users.add(userid)
+            userid += 1
+
+            len_unique_items = len(unique_items)
+            current_key = None
+            items_set = set()
 
         file_handle.seek(0)
         for idx, line in enumerate(file_handle.readlines()):
@@ -126,17 +126,20 @@ def read_data(filename, num_negatives = 20, mini = 0):
         save_object(mat, prepath +'mat_' + str(chunk_id) + '.p')
         save_object(testRatings, prepath +'testRatings_' + str(chunk_id) + '.p')
         save_object(testNegatives, prepath +'testNegatives_' + str(chunk_id) + '.p')
+
+        save_object(unique_users, prepath +'unique_users_' + str(chunk_id) + '.p')
+        save_object(unique_items, prepath +'unique_items_' + str(chunk_id) + '.p')
+
+        num_users = len(unique_users)
+        num_items = len(unique_items)
+        save_object(num_users, prepath +'num_users_' + str(chunk_id) + '.p')
+        save_object(num_items, prepath +'num_items_' + str(chunk_id) + '.p')
+
         del mat
         del testRatings
         del testNegatives
-
-    save_object(unique_users, prepath +'unique_users.p')
-    save_object(unique_items, prepath +'unique_items.p')  
-
-    num_users = len(unique_users)
-    num_items = len(unique_items)
-    save_object(num_users, prepath +'num_users.p')
-    save_object(num_items, prepath +'num_items.p')
+        del unique_users
+        del unique_items
 
     file_handle.close()
     
