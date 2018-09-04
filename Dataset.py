@@ -10,7 +10,7 @@ import pickle
 import random
 import sys
 from hyperparams import Hyperparams as hp
-from modules import * #yueqiu
+
 mini = int(sys.argv[1])
 gt = int(sys.argv[2])
 if mini == 1:
@@ -123,10 +123,8 @@ def read_data(filename, num_negatives = 20, mini = 0):
         del items_ptime_list[test_item_index]
         testRatings.append([current_key, test_item])
         for i in items_ptime_list:
-            pt = i[1]
-            sp = pt2sp(pt)
-            for i in range(sp):
-                mat[current_key, i[0]] = 1
+            
+            mat[current_key, i[0]] = i[1] 
         prepath = hp.prepath + hp.fn if gt == 1 else hp.prepath #yueqiu
         prepath = prepath + 'mini_' if mini == 1 else prepath #yueqiu
 
@@ -153,7 +151,6 @@ def main():
     if mini == 1:
         filename = prepath + 'info_mini2.txt'
     else:
-
         filename = prepath + 'info.txt'
     read_data(filename, mini = mini)
 
