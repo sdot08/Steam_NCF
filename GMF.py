@@ -28,7 +28,6 @@ import os # add by Aodong
 from hyperparams import Hyperparams as hp #yueqiu
 
 import pickle
-import util
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run GMF.")
