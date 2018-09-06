@@ -140,6 +140,10 @@ def read_data(filename, num_negatives = 20, mini = 0):
         del testNegatives
         del unique_users
         del unique_items
+        del unique_users_raw
+        del unique_items_raw
+        del item2itemid
+        del user2userid
 
     file_handle.close()
     

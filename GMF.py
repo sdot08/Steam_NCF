@@ -68,13 +68,14 @@ def parse_args():
 #def init_normal():
 #    return initializers.RandomNormal(stddev=0.01)
 
-def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
+def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 0):
     num_cat = 18
     
     # Input variables
     user_input = Input(shape=(1,), dtype='int32', name = 'user_input')
     item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
-    cat_input = Input(shape=(num_cat,), dtype='float', name = 'cat_input')
+    if if_cat:
+        cat_input = Input(shape=(num_cat,), dtype='float', name = 'cat_input')
  #   MF_Embedding_User = Embedding(input_dim = num_users, output_dim = latent_dim, name = 'user_embedding',
  #                                 init = init_normal, W_regularizer = l2(regs[0]), input_length=1)
  #   MF_Embedding_Item = Embedding(input_dim = num_items, output_dim = latent_dim, name = 'item_embedding',
@@ -102,8 +103,12 @@ def get_model(num_users, num_items, latent_dim, regs=[0,0], if_cat = 1):
     #prediction = Lambda(lambda x: K.sigmoid(K.sum(x)), output_shape=(1,))(predict_vector)
     prediction = Dense(1, activation='sigmoid', init='lecun_uniform', name = 'prediction')(predict_vector)
     
-    model = Model(inputs=[user_input, item_input, cat_input], 
-                outputs=prediction)
+    if if_cat:
+        model = Model(inputs=[user_input, item_input, cat_input], 
+                    outputs=prediction)
+    else:
+        model = Model(inputs=[user_input, item_input], 
+                    outputs=prediction)
     return model
 
 def get_train_instances(train, num_negatives, prepath):
@@ -180,6 +185,7 @@ if __name__ == '__main__':
     
     # Train model
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
+    if_cat = False
     for epoch in range(epochs):
         t1 = time()
         # Generate training instances
@@ -187,9 +193,15 @@ if __name__ == '__main__':
         user_input, item_input, labels = get_train_instances(train, num_negatives, prepath)
         
         # Training
-        hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input
-                         np.array(labels), # labels 
-                         batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
+        if if_cat:
+            hist = model.fit([np.array(user_input), np.array(item_input), np.array(cat_input)], #input
+                             np.array(labels), # labels 
+                             batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
+        else:
+            hist = model.fit([np.array(user_input), np.array(item_input)], #input
+                             np.array(labels), # labels 
+                             batch_size=batch_size, nb_epoch=1, verbose=0, shuffle=True)
+
         t2 = time()
         # Evaluation
         if epoch %verbose == 0:
