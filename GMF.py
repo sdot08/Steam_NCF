@@ -145,6 +145,7 @@ if __name__ == '__main__':
     topK = 10
     evaluation_threads = 1 #mp.cpu_count()
     print("GMF arguments: %s" %(args))
+    sys.stdout.flush()
     prepath_out = hp.prepath_out + hp.fn if gt == 1 else hp.prepath_out #yueqiu
     prepath_out = prepath_out + 'mini_' if mini == 1 else prepath_out #yueqiu
     model_out_file = prepath_out + 'GMF_%d.h5' %(num_factors) # modified by Aodong
@@ -181,6 +182,7 @@ if __name__ == '__main__':
     #mf_embedding_norm = np.linalg.norm(model.get_layer('user_embedding').get_weights())+np.linalg.norm(model.get_layer('item_embedding').get_weights())
     #p_norm = np.linalg.norm(model.get_layer('prediction').get_weights()[0])
     print('Init: HR = %.4f, NDCG = %.4f\t [%.1f s]' % (hr, ndcg, time()-t1))
+    sys.stdout.flush()
     
     # Train model
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
@@ -208,6 +210,7 @@ if __name__ == '__main__':
             hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
             print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]' 
                   % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
+            sys.stdout.flush()
             if hr > best_hr:
                 best_hr, best_ndcg, best_iter = hr, ndcg, epoch
                 if args.out > 0:
@@ -216,3 +219,4 @@ if __name__ == '__main__':
     print("End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. " %(best_iter, best_hr, best_ndcg))
     if args.out > 0:
         print("The best GMF model is saved to %s" %(model_out_file))
+    sys.stdout.flush()
